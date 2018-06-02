@@ -19,9 +19,9 @@ Get map data for later:
 ```{r}
 if(!file_exists(path(here("data"), "pdx_map.rds"))){
   pdx <- get_map("portland, OR", maptype = "toner-lite", zoom = 12)
-  write_rds(pdx, path(here("data"), "pdx_map.rds"))
+  write_rds(pdx, here("data", "pdx_map.rds"))
 } else {
-  pdx <- read_rds(path(here("data"), "pdx_map.rds"))
+  pdx <- read_rds(here("data", "pdx_map.rds"))
 }
 ```
 

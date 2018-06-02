@@ -60,10 +60,10 @@ public_trip_data <- public_trip_data %>%
 usethis::use_directory("data")
 
 public_trip_data %>%
-  write_csv(here(path("data", "public-trips.csv")))
+  write_csv(here("data", "public-trips.csv"))
 
 public_trip_data %>%
-  write_rds(here(path("data", "public-trips.rds")))
+  write_rds(here("data", "public-trips.rds"))
 
 
 # Cleanup -----------------------------------------------------------------
