@@ -1,0 +1,176 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(lubridate)
+library(here)
+library(fs)
+library(cluster)
+library(ggmap)
+# devtools::install_github("thomasp85/patchwork")
+library(patchwork)
+```
+
+Get map data for later:
+```{r}
+if(!file_exists(path(here("data"), "pdx_map.rds"))){
+  pdx <- get_map("portland, OR", maptype = "toner-lite", zoom = 12)
+  write_rds(pdx, path(here("data"), "pdx_map.rds"))
+} else {
+  pdx <- read_rds(path(here("data"), "pdx_map.rds"))
+}
+```
+
+Get already clean data:
+```{r import}
+trips <- read_rds(path(here("data"), "public-trips.rds"))
+
+# Exclude trips that start after ending
+trips_valid <- trips %>%
+  mutate(duration = end - start) %>%
+  filter(duration > 0) 
+```
+
+# Use high traffic hubs
+
+```{r}
+hub_by_hour <- trips_valid %>%
+  drop_na(StartHub) %>%
+  group_by(StartHub, hour = hour(start)) %>%
+  summarise(
+    n_trips = n(),
+    lon = first(StartLongitude),
+    lat = first(StartLatitude)
+  ) 
+
+# total trips over time period
+hub_totals <- hub_by_hour %>%
+  summarize(total_trips = sum(n_trips)) 
+
+hub_totals %>%
+  ggplot(aes(x = total_trips)) +
+    geom_histogram()
+
+# high traffic = more than 1000 trips in this dataset - arbitrary!
+high_traffic <- hub_totals %>% 
+  filter(total_trips > 1000) %>% 
+  pull(StartHub)
+
+hub_by_hour_high <- hub_by_hour %>% 
+  filter(StartHub %in% high_traffic)
+```
+
+## Quick checks
+```{r}
+# Raw counts
+hub_by_hour_high %>%
+  ggplot(aes(hour, n_trips))  +
+    geom_line(aes(group = StartHub)) 
+```
+
+```{r}
+# Proportion of trips by hour
+hub_by_hour_high <- hub_by_hour_high %>%
+  mutate(prop_trips = n_trips/sum(n_trips)) 
+
+hub_by_hour_high %>%
+  ggplot(aes(hour, prop_trips))  +
+    geom_line(aes(group = StartHub)) 
+```
+
+Does a better job of getting things on the same scale.
+
+## Clustering
+
+`agnes()` wants each row to be an observation, so my columns will be hours.
+
+```{r}
+hub_rect <- hub_by_hour_high %>%
+  select(StartHub, hour, prop_trips) %>% 
+  spread(key = hour, value = prop_trips, fill = 0) 
+
+hub_cluster <- agnes(hub_rect[, -1], method = "ward")
+plot(hub_cluster)
+
+# How many clusters? 
+clusters <- data_frame(
+  StartHub = hub_rect$StartHub,
+  cluster = cutree(hub_cluster, k = 5))
+
+hub_with_cluster <- hub_by_hour_high %>%
+  left_join(clusters) 
+
+hub_with_cluster %>%
+  ggplot(aes(hour, prop_trips))  +
+    geom_line(aes(group = StartHub))  +
+  facet_wrap(~ cluster)
+```
+
+```{r}
+hub_with_cluster %>% 
+  ggplot(aes(lon, lat, color = factor(cluster))) +
+  geom_point()
+```
+
+
+## Cluster by cluster plots
+
+```{r}
+breaks <- c(0, 3, 6, 9, 12, 15, 18, 21, 24)
+labels <- c("12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm", "")
+
+# Base time series plot
+base_plot_ts <- hub_with_cluster %>%
+  ggplot(aes(hour, prop_trips))  +
+    geom_line(aes(group = StartHub), color = "grey80", alpha = 0.5, size = 0.5)  +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(breaks = breaks, labels = labels, minor_breaks = 1:24) +
+  labs(y = "Percentage of Trips", x = "") +
+  theme_bw(12)
+
+# Base hub location plot
+base_map <- ggmap(pdx, base_layer = ggplot(hub_with_cluster, aes(lon, lat)),
+    darken = c(0.60, "white")) +
+  geom_point(color = "grey80", size = 1)  +
+  labs(y = "", x = "") +
+  coord_map(xlim = c(-122.62, -122.71), 
+    ylim = c(45.49, 45.57)) +
+  theme_void(12) +
+  theme(panel.border = element_rect(fill = NA, color = "grey10"))
+
+make_plot <- function(cluster_num, caption, color = "red"){
+  one_cluster <- hub_with_cluster %>% filter(cluster == cluster_num)
+  base_plot_ts +
+      geom_line(aes(group = StartHub), data = one_cluster, color = color, size = 1, alpha = 0.5) +
+    base_map + 
+      geom_point(data = one_cluster, color = color)  +
+    plot_annotation(title = caption) +
+    plot_layout(width = c(3, 1))
+}
+
+make_plot(1, "", "red")
+```
+
+Make all figures:
+```{r}
+plot_params <- tribble(
+  ~ cluster_num, ~ caption                                         , 
+  3, "Most of the rides at these hubs tend to start around 8am."           , 
+  1, "These hubs also peak around at 8am, but it's less extreme."                        , 
+  4, "These hubs are mostly used after lunch.",
+  2, "These hubs seem to be used consistently between 8am and 5pm." ,
+  5, "And these hubs at lunchtime and 5pm...?"
+)
+
+plot_params$color <- RColorBrewer::brewer.pal(nrow(plot_params), "Set1")
+
+plots <- pmap(plot_params, make_plot)
+paths <- path(here("plots", paste0("cluster_", plot_params$cluster_num, ".png")))
+  
+walk2(paths, plots, ggsave, height = 2.5, width = 9)
+```
+
