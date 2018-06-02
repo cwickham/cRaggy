@@ -146,6 +146,7 @@ make_plot <- function(cluster_num, caption, color = "red"){
   one_cluster <- hub_with_cluster %>% filter(cluster == cluster_num)
   base_plot_ts +
       geom_line(aes(group = StartHub), data = one_cluster, color = color, size = 1, alpha = 0.5) +
+      annotate("text", label = "Each line is one hub", x = 21, y = 0.18, color = "grey50") +
     base_map + 
       geom_point(data = one_cluster, color = color)  +
     plot_annotation(title = caption) +
@@ -160,7 +161,7 @@ Make all figures:
 plot_params <- tribble(
   ~ cluster_num, ~ caption                                         , 
   3, "Most of the rides at these hubs tend to start around 8am."           , 
-  1, "These hubs also peak around at 8am, but it's less extreme."                        , 
+  1, "These hubs also peak around 8am, but it's less extreme."                        , 
   4, "These hubs are mostly used after lunch.",
   2, "These hubs seem to be used consistently between 8am and 5pm." ,
   5, "And these hubs at lunchtime and 5pm...?"

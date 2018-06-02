@@ -318,9 +318,9 @@ library(patchwork)</code></pre>
 <p>Get map data for later:</p>
 <pre class="r"><code>if(!file_exists(path(here(&quot;data&quot;), &quot;pdx_map.rds&quot;))){
   pdx &lt;- get_map(&quot;portland, OR&quot;, maptype = &quot;toner-lite&quot;, zoom = 12)
-  write_rds(pdx, path(here(&quot;data&quot;), &quot;pdx_map.rds&quot;))
+  write_rds(pdx, here(&quot;data&quot;, &quot;pdx_map.rds&quot;))
 } else {
-  pdx &lt;- read_rds(path(here(&quot;data&quot;), &quot;pdx_map.rds&quot;))
+  pdx &lt;- read_rds(here(&quot;data&quot;, &quot;pdx_map.rds&quot;))
 }</code></pre>
 <p>Get already clean data:</p>
 <pre class="r"><code>trips &lt;- read_rds(path(here(&quot;data&quot;), &quot;public-trips.rds&quot;))
@@ -441,7 +441,7 @@ make_plot(1, &quot;&quot;, &quot;red&quot;)</code></pre>
 <pre class="r"><code>plot_params &lt;- tribble(
   ~ cluster_num, ~ caption                                         , 
   3, &quot;Most of the rides at these hubs tend to start around 8am.&quot;           , 
-  1, &quot;These hubs also peak around at 8am, but it's less extreme.&quot;                        , 
+  1, &quot;These hubs also peak around 8am, but it's less extreme.&quot;                        , 
   4, &quot;These hubs are mostly used after lunch.&quot;,
   2, &quot;These hubs seem to be used consistently between 8am and 5pm.&quot; ,
   5, &quot;And these hubs at lunchtime and 5pm...?&quot;
